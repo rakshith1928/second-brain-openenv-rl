@@ -178,9 +178,9 @@ def get_agent_action(
         print(f"[DEBUG] LLM parse error: {exc}", flush=True)
         # Fallback actions per task
         fallbacks = {
-            "note_categorization": SecondBrainAction(action_type="categorize", content="work"),
-            "memory_retrieval":    SecondBrainAction(action_type="retrieve",   content="important note"),
-            "knowledge_synthesis": SecondBrainAction(action_type="retrieve",   content="key information"),
+            "note_categorization": SecondBrainAction(action_type=ActionType.categorize, content="work"),
+            "memory_retrieval":    SecondBrainAction(action_type=ActionType.retrieve,   content="important note"),
+            "knowledge_synthesis": SecondBrainAction(action_type=ActionType.synthesize,   content="key information"),
         }
         return fallbacks[task_name]
 

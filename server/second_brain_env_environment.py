@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
-from models import SecondBrainState
 
 # We import models relative to the server's working directory
 import sys, os
@@ -132,10 +131,10 @@ class SecondBrainEnvironment(Environment):
         current_note = self._notes_queue[self._current_note_idx]
         correct = current_note["correct_category"]
 
-        if action.action_type == "skip":
+        if action.action_type == ActionType.skip:
             reward = 0.0
             feedback = f"Skipped. Correct category was '{correct}'."
-        elif action.action_type == "categorize":
+        elif action.action_type == ActionType.categorize:
             if action.content.strip().lower() == correct:
                 reward = 0.10
                 self._correct_count += 1
@@ -176,7 +175,7 @@ class SecondBrainEnvironment(Environment):
 
         current_q = self._questions_queue[self._current_q_idx]
 
-        if action.action_type == "retrieve":
+        if action.action_type == ActionType.retrieve:
             query = action.content
             # Score all KB notes against the query
             scored = []
@@ -235,7 +234,7 @@ class SecondBrainEnvironment(Environment):
                 remaining=remaining,
             )
 
-        elif action.action_type == "skip":
+        elif action.action_type == ActionType.skip:
             self._retrieval_scores.append(0.0)
             self._current_q_idx += 1
             done = self._current_q_idx >= len(self._questions_queue)
@@ -269,7 +268,7 @@ class SecondBrainEnvironment(Environment):
 
         current_q = self._questions_queue[self._current_q_idx]
 
-        if action.action_type == "retrieve":
+        if action.action_type == ActionType.retrieve:
             # Agent is collecting relevant notes before synthesizing
             query = action.content
             scored = []
@@ -300,7 +299,7 @@ class SecondBrainEnvironment(Environment):
                 remaining=len(self._questions_queue) - self._current_q_idx,
             )
 
-        elif action.action_type == "synthesize":
+        elif action.action_type == ActionType.synthesize:
             answer = action.content.lower()
             expected = current_q["expected_insight"].lower()
             themes = current_q["key_themes"]
@@ -359,7 +358,7 @@ class SecondBrainEnvironment(Environment):
                 remaining=len(self._questions_queue) - self._current_q_idx,
             )
 
-        elif action.action_type == "skip":
+        elif action.action_type == ActionType.skip:
             self._synthesis_scores.append(0.0)
             self._collected_note_ids = []
             self._current_q_idx += 1
