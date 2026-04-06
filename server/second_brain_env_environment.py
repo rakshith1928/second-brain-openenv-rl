@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from openenv.core.env_server.interfaces import Environment
-from openenv.core.env_server.types import State
+from models import SecondBrainState
 
 # We import models relative to the server's working directory
 import sys, os
@@ -460,7 +460,9 @@ class SecondBrainEnvironment(Environment):
     def step(self, action: SecondBrainAction) -> SecondBrainObservation:
         self._step_count += 1
         self._state.step_count = self._step_count
-
+        self._state.task_name = self._task_name
+        self._state.score = self._current_score()
+        self._state.done = self._done
         # Hard step limit
         max_steps = MAX_STEPS[self._task_name]
         if self._step_count > max_steps:

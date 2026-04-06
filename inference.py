@@ -20,6 +20,7 @@ from typing import List, Optional
 from openai import OpenAI
 from client import SecondBrainEnv
 from models import SecondBrainAction
+from models import ActionType
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -167,7 +168,7 @@ def get_agent_action(
 
         data = json.loads(text)
         return SecondBrainAction(
-            action_type=data.get("action_type", "skip"),
+            action_type=ActionType(data.get("action_type", "skip")),
             content=data.get("content", ""),
             note_id=data.get("note_id"),
             tags=data.get("tags"),
