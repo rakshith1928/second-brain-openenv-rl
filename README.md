@@ -222,7 +222,7 @@ second_brain_env/
 ## 👥 Team
 
 **Team TwinCoders**
-- Rachana N (RAc1928)
+- Rachana N 
 - Rakshith N
 
 Built for the Meta × PyTorch × HuggingFace OpenEnv Hackathon 2026.
