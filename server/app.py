@@ -3,8 +3,7 @@ FastAPI server for Second Brain OpenEnv environment.
 Exposes reset(), step(), state() over HTTP + WebSocket.
 """
 import os
-from typing import Optional
-from fastapi import FastAPI, Query
+from fastapi import FastAPI
 from openenv.core.env_server import create_app
 
 from second_brain_env_environment import SecondBrainEnvironment
