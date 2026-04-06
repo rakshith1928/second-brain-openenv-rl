@@ -1,16 +1,20 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
-"""Second Brain Env Environment."""
-
-from .client import SecondBrainEnv
-from .models import SecondBrainAction, SecondBrainObservation
-
+"""
+Second Brain OpenEnv Environment
+=================================
+A Personal Knowledge Management environment for training AI agents
+to capture, organize, and retrieve information.
+ 
+Usage:
+    from second_brain_env import SecondBrainAction, SecondBrainObservation, SecondBrainState, SecondBrainEnv
+"""
+from models import SecondBrainAction, SecondBrainObservation, SecondBrainState, ActionType
+from client import SecondBrainEnv
+ 
 __all__ = [
     "SecondBrainAction",
     "SecondBrainObservation",
+    "SecondBrainState",
+    "ActionType",
     "SecondBrainEnv",
 ]
+__version__ = "1.0.0"
