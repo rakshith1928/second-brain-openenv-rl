@@ -1,0 +1,99 @@
+name: second_brain_env
+version: "1.0.0"
+description: >
+  A Personal Knowledge Management environment where AI agents learn to
+  capture, organize, and retrieve information — simulating the real-world
+  challenge of managing a second brain. Three tasks of increasing difficulty:
+  note categorization (easy), memory retrieval (medium), and knowledge
+  synthesis (hard).
+author: RAc1928
+tags:
+  - openenv
+  - knowledge-management
+  - information-retrieval
+  - real-world
+  - nlp
+
+tasks:
+  - name: note_categorization
+    difficulty: easy
+    description: Categorize 10 raw notes into correct categories (work/personal/reference/action_item)
+    max_steps: 12
+    reward_range: [-0.02, 0.10]
+    success_threshold: 0.5
+
+  - name: memory_retrieval
+    difficulty: medium
+    description: Retrieve the most relevant note from a 30-note knowledge base for each of 5 questions
+    max_steps: 15
+    reward_range: [-0.10, 0.20]
+    success_threshold: 0.5
+
+  - name: knowledge_synthesis
+    difficulty: hard
+    description: Collect and synthesize insights from a 50-note knowledge base to answer complex multi-theme questions
+    max_steps: 20
+    reward_range: [-0.10, 0.35]
+    success_threshold: 0.5
+
+action_space:
+  type: SecondBrainAction
+  fields:
+    action_type:
+      type: string
+      enum: [categorize, retrieve, synthesize, tag, skip]
+    content:
+      type: string
+      description: Category name / search query / synthesized answer
+    note_id:
+      type: string
+      optional: true
+    tags:
+      type: array
+      items: string
+      optional: true
+
+observation_space:
+  type: SecondBrainObservation
+  fields:
+    current_note:
+      type: object
+      optional: true
+    query:
+      type: string
+      optional: true
+    retrieved_notes:
+      type: array
+      optional: true
+    knowledge_base_size:
+      type: integer
+    step_count:
+      type: integer
+    task_name:
+      type: string
+    reward:
+      type: float
+    done:
+      type: boolean
+    score:
+      type: float
+      description: Running normalized score in [0.0, 1.0]
+    feedback:
+      type: string
+    valid_categories:
+      type: array
+      items: string
+    remaining_items:
+      type: integer
+
+environment:
+  type: http
+  framework: fastapi
+  dockerfile: server/Dockerfile
+  port: 8000
+  endpoints:
+    reset: POST /reset
+    step:  POST /step
+    state: GET  /state
+    tasks: GET  /tasks
+    health: GET /health
