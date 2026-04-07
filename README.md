@@ -1,3 +1,13 @@
+---
+title: Second Brain Environment
+emoji: 🧠
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 8000
+---
+
+
 # 🧠 Second Brain — OpenEnv Environment
 
 > A Personal Knowledge Management environment where AI agents learn to capture, organize, and retrieve information — simulating the real-world challenge of managing a second brain.
