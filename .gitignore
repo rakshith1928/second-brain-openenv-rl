@@ -154,3 +154,6 @@ logs/
 
 # Docker (if building locally)
 .dockerignore
+
+# OpenEnv specific
+outputs/

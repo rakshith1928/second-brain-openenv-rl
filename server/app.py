@@ -3,11 +3,12 @@ FastAPI server for Second Brain OpenEnv environment.
 Exposes reset(), step(), state() over HTTP + WebSocket.
 """
 import os
-from fastapi import FastAPI
+from typing import Optional
+from fastapi import FastAPI, Query
 from openenv.core.env_server import create_app
 
 from second_brain_env_environment import SecondBrainEnvironment
-from models import SecondBrainAction
+from models import SecondBrainAction, SecondBrainObservation
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,8 +17,11 @@ VALID_TASKS = ["note_categorization", "memory_retrieval", "knowledge_synthesis"]
 
 
 def make_app(task_name: str = "note_categorization") -> FastAPI:
-    env = SecondBrainEnvironment(task_name=task_name)
-    app = create_app(env, action_type=SecondBrainAction)
+    app = create_app(
+        SecondBrainEnvironment,
+        action_cls=SecondBrainAction,
+        observation_cls=SecondBrainObservation
+    )
     return app
 
 
@@ -59,3 +63,12 @@ def list_tasks():
 @app.get("/health")
 def health():
     return {"status": "ok", "environment": "second_brain_env"}
+
+
+def main():
+    import uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, workers=2)
+
+
+if __name__ == "__main__":
+    main()
