@@ -21,6 +21,13 @@ app = create_app(
     observation_cls=SecondBrainObservation,
 )
 
+@app.get("/")
+def home():
+    return {
+        "message": "Second Brain OpenEnv is online 🚀",
+        "task": _task,
+    }
+
 @app.get("/tasks")
 def list_tasks():
     return {
