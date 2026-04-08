@@ -1,7 +1,7 @@
 import os
 from functools import partial
 from fastapi import FastAPI
-from openenv.core.env_server import create_app
+from openenv.core.env_server import create_web_interface_app
 from server.second_brain_env_environment import SecondBrainEnvironment
 from models import SecondBrainAction, SecondBrainObservation
 
@@ -15,18 +15,12 @@ _task = os.getenv("TASK_NAME", "note_categorization")
 # Use partial to bake task_name into the constructor
 TaskEnv = partial(SecondBrainEnvironment, task_name=_task)
 
-app = create_app(
-    TaskEnv,
+app = create_web_interface_app(
+    env=TaskEnv,
     action_cls=SecondBrainAction,
     observation_cls=SecondBrainObservation,
+    env_name=_task,
 )
-
-@app.get("/")
-def home():
-    return {
-        "message": "Second Brain OpenEnv is online 🚀",
-        "task": _task,
-    }
 
 @app.get("/tasks")
 def list_tasks():
