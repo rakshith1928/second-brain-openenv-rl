@@ -97,7 +97,7 @@ class SecondBrainObservation(BaseModel):
 
 ### Install
 ```bash
-pip install openenv-core
+pip install openenv-core python-dotenv
 pip install git+https://huggingface.co/spaces/RAc1928/second-brain-env
 ```
 
@@ -106,8 +106,8 @@ pip install git+https://huggingface.co/spaces/RAc1928/second-brain-env
 git clone https://huggingface.co/spaces/RAc1928/second-brain-env
 cd second-brain-env
 
-docker build -t second-brain-env -f server/Dockerfile .
-docker run -p 8000:8000 second-brain-env
+docker build -t second-brain-env .
+docker run -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 second-brain-env
 ```
 
 ### Connect as a client
@@ -194,10 +194,10 @@ Task 3 (synthesis):
 
 ```bash
 # Build
-docker build -t second-brain-env -f server/Dockerfile .
+docker build -t second-brain-env .
 
-# Run
-docker run -p 8000:8000 -e TASK_NAME=note_categorization second-brain-env
+# Run (starts all 3 task servers automatically)
+docker run -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 second-brain-env
 
 # Test
 curl -X POST http://localhost:8000/reset

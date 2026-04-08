@@ -1,19 +1,8 @@
 """
-inference.py — Second Brain OpenEnv Baseline Inference Script (FIXED)
+inference.py — Second Brain OpenEnv Baseline Inference Script
 
-Fixes applied:
-  1. note_categorization  — Step 1 was echoing the note text instead of a category.
-                            New prompt makes the model output ONLY the category word.
-  2. knowledge_synthesis  — Retrieval queries used generic "self-care/patterns" words
-                            that don't appear in any note. New prompt tells the model
-                            to use CONCRETE words that actually exist in the notes.
-  3. knowledge_synthesis  — Synthesis answers were too short and missed required theme
-                            words. force_synthesize prompt now lists exact words that
-                            must appear in the answer.
-  4. reward logging       — reward was read from obs AFTER it moved to the next item,
-                            so it always showed 0.0. Now read from result directly.
-  5. retrieval debugging  — added [RETRIEVED] log lines so you can see what notes
-                            the env actually returns (makes tuning queries much easier).
+Runs all 3 tasks against the environment and produces structured logs.
+Uses Groq API for LLM inference.
 """
 
 import re
@@ -21,15 +10,14 @@ import asyncio
 import json
 import os
 import sys
-
+import subprocess
+import time
 import textwrap
 from typing import List, Optional
-venv_python = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
 
-if os.path.exists(venv_python) and sys.executable != venv_python:
-    os.execv(venv_python, [venv_python] + sys.argv)
 from dotenv import load_dotenv
 load_dotenv()
+
 from openai import OpenAI
 from client import SecondBrainEnv
 from models import SecondBrainAction, ActionType
@@ -42,8 +30,8 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
 MODEL_NAME   = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
 BENCHMARK    = "second_brain_env"
 MAX_STEPS    = 20
-TEMPERATURE  = 0.2          # lower = more deterministic, fewer hallucinations
-MAX_TOKENS   = 512          # synthesis answers don't need to be huge
+TEMPERATURE  = 0.2
+MAX_TOKENS   = 512
 SUCCESS_THRESHOLD = 0.5
 
 TASK_PORTS = {
@@ -59,7 +47,62 @@ TASKS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Logging helpers
+# Server management — auto-start local servers if not already running
+# ---------------------------------------------------------------------------
+
+_server_procs: List[subprocess.Popen] = []
+
+def _check_server(port: int) -> bool:
+    """Check if a server is already running on the given port."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("localhost", port)) == 0
+
+def start_servers():
+    """Start uvicorn servers for each task if they aren't already running."""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.path.dirname(os.path.abspath(__file__))
+
+    for task_name, port in TASK_PORTS.items():
+        if _check_server(port):
+            print(f"[INFO] Server already running on port {port} for {task_name}", flush=True)
+            continue
+
+        env_copy = env.copy()
+        env_copy["TASK_NAME"] = task_name
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "uvicorn", "server.app:app",
+             "--host", "0.0.0.0", "--port", str(port)],
+            env=env_copy,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+        )
+        _server_procs.append(proc)
+        print(f"[INFO] Started server for {task_name} on port {port} (PID {proc.pid})", flush=True)
+
+    # Wait for servers to be ready
+    print("[INFO] Waiting for servers to start...", flush=True)
+    for attempt in range(30):
+        all_ready = all(_check_server(p) for p in TASK_PORTS.values())
+        if all_ready:
+            print("[INFO] All servers ready.", flush=True)
+            return
+        time.sleep(1)
+    print("[WARN] Some servers may not be ready after 30s.", flush=True)
+
+def stop_servers():
+    """Stop all servers started by this script."""
+    for proc in _server_procs:
+        try:
+            proc.terminate()
+            proc.wait(timeout=5)
+        except Exception:
+            proc.kill()
+    _server_procs.clear()
+
+# ---------------------------------------------------------------------------
+# Logging helpers — exact format required by competition
 # ---------------------------------------------------------------------------
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -84,13 +127,10 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     )
 
 # ---------------------------------------------------------------------------
-# System prompts  (ALL FIXED)
+# System prompts
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPTS = {
-    # FIX 1: old prompt didn't stop the model from echoing the note.
-    # The new prompt explicitly says "output ONLY the category word, nothing else"
-    # and uses a clear example to anchor the output format.
     "note_categorization": textwrap.dedent("""
         You are a note classifier. Your ONLY job is to output a JSON object with
         the correct category for the note shown to you.
@@ -115,7 +155,6 @@ SYSTEM_PROMPTS = {
           Output: {"action_type": "categorize", "content": "action_item"}
     """).strip(),
 
-    # memory_retrieval was already working (score 1.0). Keep it identical.
     "memory_retrieval": textwrap.dedent("""
         You are a knowledge retrieval agent.
         Convert the question into 3-5 important keywords only.
@@ -126,11 +165,6 @@ SYSTEM_PROMPTS = {
         {"action_type": "retrieve", "content": "keyword1 keyword2 keyword3"}
     """).strip(),
 
-    # FIX 2 & 3:
-    #   - Retrieval: must use CONCRETE words that exist in the notes (meeting, sleep,
-    #     exercise, stress, Slack, skipped, overwhelmed, etc.), NOT abstract phrases
-    #     like "self-care strategies" or "health connections" which match nothing.
-    #   - Synthesis: must cover ALL key theme words and write at least 60 words.
     "knowledge_synthesis": textwrap.dedent("""
         You are a knowledge synthesis agent.
 
@@ -165,23 +199,15 @@ SYSTEM_PROMPTS = {
 
 # ---------------------------------------------------------------------------
 # Per-question retrieval keyword hints
-# These are injected into the user prompt to guide the model toward the right
-# vocabulary BEFORE it has seen any retrieved notes.
 # ---------------------------------------------------------------------------
 
-# Maps question substrings → pre-seeded keyword suggestions for the first retrieve call.
-# The model is free to deviate on later calls (it should — diversity matters).
 RETRIEVAL_HINTS = {
-    # synthesis q1
     "work stress notes": "overwhelmed meetings sleep skipped exercise",
     "patterns connect":  "overwhelmed meetings sleep skipped exercise",
-    # synthesis q2
     "technical decisions": "microservices architecture OKR async standup",
     "q2/q3":              "microservices architecture OKR async standup",
-    # synthesis q3
     "lifestyle changes":  "meditation walk Slack sleep boundaries",
     "what actually worked": "meditation walk Slack sleep boundaries",
-    # retrieval task keywords
     "john": "john deadline april project",
     "weather service": "api rate limit weather calls",
     "visa": "visa appointment june documents",
@@ -190,7 +216,6 @@ RETRIEVAL_HINTS = {
 }
 
 def _get_hint(query: str) -> str:
-    """Return pre-seeded retrieval keywords for a known question, or empty string."""
     if not query:
         return ""
     q_lower = query.lower()
@@ -214,8 +239,6 @@ def get_agent_action(
 
     context_parts = [f"Step: {step}"]
 
-    # --- note_categorization: show ONLY the note text, nothing else ---
-    # Old code added lots of context which confused the model on step 1.
     if task_name == "note_categorization":
         note = obs.get("current_note") or {}
         note_text = note.get("text", "")
@@ -223,7 +246,6 @@ def get_agent_action(
         context_parts.append(f"Remaining notes: {obs.get('remaining_items', 0)}")
 
     else:
-        # retrieval / synthesis tasks
         query = obs.get("query", "")
         if query:
             context_parts.append(f"CURRENT QUESTION: {query}")
@@ -239,13 +261,10 @@ def get_agent_action(
 
         context_parts.append(f"Remaining questions: {obs.get('remaining_items', 0)}")
 
-        # Include only the last 2 history entries — just enough to avoid repeating
-        # the same retrieve query, not so much that the question gets buried.
         if history:
             context_parts.append("Recent actions:\n" + "\n".join(history[-2:]))
 
         if force_synthesize:
-            # FIX 3: explicitly list theme words the scorer checks for
             context_parts.append(
                 "\nINSTRUCTION: You MUST now SYNTHESIZE. Write at least 60 words. "
                 "Use these theme words in your answer (where relevant): "
@@ -254,7 +273,6 @@ def get_agent_action(
                 "Address the CURRENT QUESTION directly. Use action_type='synthesize'."
             )
         else:
-            # FIX 2: steer first retrieve toward concrete vocabulary
             hint = _get_hint(obs.get("query", ""))
             hint_text = f" Start with these concrete words: [{hint}]." if hint and step <= 2 else ""
             context_parts.append(
@@ -296,7 +314,6 @@ def get_agent_action(
 
     except Exception as exc:
         print(f"[DEBUG] LLM parse error: {exc}", flush=True)
-        # Sane fallbacks so an error doesn't tank the whole episode
         fallbacks = {
             "note_categorization": SecondBrainAction(
                 action_type=ActionType.categorize,
@@ -328,7 +345,6 @@ def get_agent_action(
         if force_synthesize:
             action.action_type = ActionType.synthesize
         else:
-            # Don't let the model sneak in a premature synthesize
             action.action_type = ActionType.retrieve
 
     # Empty retrieve content is useless — give it a default
@@ -366,8 +382,6 @@ async def run_task(client: OpenAI, task_name: str) -> float:
         )
 
         retrieves_this_question = 0
-        # FIX: use 3 retrieves before synthesizing.
-        # 4 was fine but 3 leaves more steps for the 3 synthesis questions within MAX_STEPS=20.
         RETRIEVES_BEFORE_SYNTH = 3
 
         for step in range(1, MAX_STEPS + 1):
@@ -385,16 +399,12 @@ async def run_task(client: OpenAI, task_name: str) -> float:
             try:
                 result = await env.step(action)
 
-                # result.reward is injected by the fixed _parse_result in client.py.
-                # It reads from the raw HTTP response dict BEFORE Pydantic constructs
-                # the observation, so it is never silently reset to the field default.
                 reward = float(getattr(result, "reward", 0.0))
 
                 obs  = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)
                 done = bool(result.done)
                 error = None
 
-                # Show retrieved notes for query tuning (remove if too noisy)
                 if obs.get("retrieved_notes"):
                     for n in obs["retrieved_notes"]:
                         print(f"  [RETRIEVED] {n['id']}: {n['text'][:70]}", flush=True)
@@ -452,12 +462,17 @@ async def main() -> None:
     print("BASELINE SCORES SUMMARY", flush=True)
     print(f"{'='*60}", flush=True)
     for task, score in all_scores.items():
-        status = "✓ PASS" if score >= SUCCESS_THRESHOLD else "✗ FAIL"
-        print(f"  {status}  {task}: {score:.3f}", flush=True)
+        status = "PASS" if score >= SUCCESS_THRESHOLD else "FAIL"
+        print(f"  [{status}]  {task}: {score:.3f}", flush=True)
     overall = sum(all_scores.values()) / len(all_scores)
     print(f"\n  Overall average: {overall:.3f}", flush=True)
     print(f"{'='*60}", flush=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Auto-start servers if not running
+    start_servers()
+    try:
+        asyncio.run(main())
+    finally:
+        stop_servers()

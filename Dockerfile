@@ -17,20 +17,20 @@ RUN pip install --no-cache-dir \
     "uvicorn[standard]" \
     pydantic \
     websockets \
-    openai
+    openai \
+    python-dotenv
 
 # Set PYTHONPATH so all imports resolve correctly
-# /app        → models.py, client.py, __init__.py
-# /app/server → app.py, data.py, second_brain_env_environment.py
 ENV PYTHONPATH="/app:/app/server"
 ENV TASK_NAME=note_categorization
 ENV PORT=8000
 
-EXPOSE 8000
+EXPOSE 8000 8001 8002 8003
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run server
-CMD ["sh", "-c", "cd /app && uvicorn server.app:app --host 0.0.0.0 --port 8000"]
+# Make start script executable & run
+RUN chmod +x /app/start.sh
+CMD ["/app/start.sh"]

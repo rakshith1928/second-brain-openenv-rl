@@ -89,7 +89,7 @@ observation_space:
 environment:
   type: http
   framework: fastapi
-  dockerfile: server/Dockerfile
+  dockerfile: Dockerfile
   port: 8000
   endpoints:
     reset: POST /reset
