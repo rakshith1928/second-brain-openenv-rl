@@ -12,11 +12,11 @@ VALID_TASKS = ["note_categorization", "memory_retrieval", "knowledge_synthesis"]
 
 _task = os.getenv("TASK_NAME", "note_categorization")
 
-# Use partial to bake task_name into the constructor
-TaskEnv = partial(SecondBrainEnvironment, task_name=_task)
+def create_task_env():
+    return SecondBrainEnvironment(task_name=_task)
 
 app = create_web_interface_app(
-    env=TaskEnv,
+    env=create_task_env,
     action_cls=SecondBrainAction,
     observation_cls=SecondBrainObservation,
     env_name=_task,
