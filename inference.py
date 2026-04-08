@@ -111,7 +111,7 @@ def log_start(task: str, env: str, model: str) -> None:
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     error_val    = error if error else "null"
     done_val     = str(done).lower()
-    action_clean = action.replace("\n", " ").replace("\r", "")[:120]
+    action_clean = action.replace("\n", " ").replace("\r", "")[:120]  # type: ignore
     print(
         f"[STEP] step={step} action={action_clean} reward={reward:.2f} "
         f"done={done_val} error={error_val}",
@@ -262,7 +262,7 @@ def get_agent_action(
         context_parts.append(f"Remaining questions: {obs.get('remaining_items', 0)}")
 
         if history:
-            context_parts.append("Recent actions:\n" + "\n".join(history[-2:]))
+            context_parts.append("Recent actions:\n" + "\n".join(history[-2:]))  # type: ignore
 
         if force_synthesize:
             context_parts.append(
@@ -299,7 +299,7 @@ def get_agent_action(
             parts = text.split("```")
             text = parts[1] if len(parts) > 1 else parts[0]
             if text.startswith("json"):
-                text = text[4:]
+                text = text[4:]  # type: ignore
         text = text.strip()
         # Strip control characters that break json.loads
         text = re.sub(r'[\x00-\x1f\x7f]', ' ', text)
@@ -372,7 +372,7 @@ async def run_task(client: OpenAI, task_name: str) -> float:
 
     try:
         result = await env.reset()
-        obs = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)
+        obs: dict = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)  # type: ignore
 
         print(
             f"[DEBUG] Server task: {obs.get('task_name')} "
@@ -401,7 +401,7 @@ async def run_task(client: OpenAI, task_name: str) -> float:
 
                 reward = float(getattr(result, "reward", 0.0))
 
-                obs  = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)
+                obs: dict = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)  # type: ignore
                 done = bool(result.done)
                 error = None
 
@@ -418,7 +418,7 @@ async def run_task(client: OpenAI, task_name: str) -> float:
             except Exception as e:
                 reward = 0.0
                 done   = True
-                error  = str(e)[:80]
+                error  = str(e)[:80]  # type: ignore
 
             rewards.append(reward)
             steps_taken = step
