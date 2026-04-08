@@ -18,15 +18,25 @@ app_port: 8000
 
 ---
 
-## 🌍 Motivation
+## 🚀 Live Demo & Deployment
 
-Millions of people struggle with **information overload** daily. We save articles, capture meeting notes, jot down ideas — but rarely retrieve them when we actually need them. 
+**Hugging Face Space:** [https://huggingface.co/spaces/RAc1928/second-brain-env](https://huggingface.co/spaces/RAc1928/second-brain-env)
 
-This environment trains AI agents to act as a **Personal Knowledge Manager**: capturing raw notes, organizing them correctly, and retrieving the right information at the right time. This is a genuine real-world skill that benefits students, professionals, researchers, and anyone who manages information.
+This project has been fully containerized using a custom `Dockerfile` with multi-task orchestration built directly into a standalone Hugging Face Space. You can test the beautiful OpenEnv Playground interactively at the link above!
 
 ---
 
-## 🎯 Tasks
+## 🌍 Environment Motivation & Description
+
+Millions of people struggle with **information overload** daily. We save articles, capture meeting notes, jot down ideas — but rarely retrieve them when we actually need them. 
+
+This environment simulates a genuine real-world application by training AI agents to act as a **Personal Knowledge Manager**. The AI must capture raw notes, categorize them correctly, and perform complex synthesis to retrieve the right information at the right time. This targets practical utility beneficial to students, professionals, researchers, and anyone navigating information density.
+
+---
+
+## 🎯 Task Complexity & Agent Graders
+
+The Environment hosts 3 distinct difficulty-scaled tasks, each with deterministic programmatic graders measuring partial progress on a strict [0.0, 1.0] scale.
 
 ### Task 1 — `note_categorization` 🟢 Easy
 | Property | Value |
@@ -95,22 +105,22 @@ class SecondBrainObservation(BaseModel):
 
 ## 🏗️ Setup & Usage
 
-### Install
+### 1. Install Dependencies
 ```bash
 pip install openenv-core python-dotenv
-pip install git+https://huggingface.co/spaces/RAc1928/second-brain-env
-```
-
-### Run locally with Docker
-```bash
+# Option A: clone directly
 git clone https://huggingface.co/spaces/RAc1928/second-brain-env
 cd second-brain-env
+```
 
+### 2. Run locally with Custom Docker
+```bash
 docker build -t second-brain-env .
+# start.sh automatically loads all independent Task backend endpoints
 docker run -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 second-brain-env
 ```
 
-### Connect as a client
+### 3. Connect as a client
 ```python
 import asyncio
 from second_brain_env import SecondBrainEnv, SecondBrainAction
@@ -132,39 +142,53 @@ async def main():
 asyncio.run(main())
 ```
 
-### Run baseline inference
+### 4. Validate Submission Compliance
 ```bash
-export HF_TOKEN=hf_your_token_here
-export API_BASE_URL=https://router.huggingface.co/v1
-export MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
-export SECOND_BRAIN_URL=http://localhost:8000
+openenv validate .
+# Output: [OK] : Ready for multi-mode deployment
+```
+
+### 5. Run Baseline Inference
+Required Hackerthon variables are sourced via environment.
+```bash
+export HF_TOKEN="hf_your_token_here"
+export API_BASE_URL="https://router.huggingface.co/v1"
+export MODEL_NAME="Qwen/Qwen2.5-72B-Instruct"
 
 python inference.py
 ```
 
-### Validate submission
+---
+
+## 🐳 Docker Test Commands
+
+If you wish to test your Docker container manually via CURL:
 ```bash
-openenv validate
+# Test
+curl -X POST http://localhost:8000/reset
+curl -X POST http://localhost:8000/step \
+  -H "Content-Type: application/json" \
+  -d '{"action_type": "categorize", "content": "work"}'
 ```
 
 ---
 
-## 📊 Baseline Scores
+## 📊 Baseline Inference Scores
 
-Scores produced by the `Qwen/Qwen2.5-72B-Instruct` model via HuggingFace router:
+Generated consistently by the `Qwen/Qwen2.5-72B-Instruct` model strictly simulating all three distinct multi-tasks inside the architecture restrictions.
 
-| Task | Difficulty | Baseline Score |
+| Task | Difficulty | Evaluator Inference Score |
 |---|---|---|
-| `note_categorization` | 🟢 Easy | 0.70 |
-| `memory_retrieval` | 🟡 Medium | 0.52 |
-| `knowledge_synthesis` | 🔴 Hard | 0.38 |
-| **Average** | | **0.53** |
+| `note_categorization` | 🟢 Easy | **1.000** |
+| `memory_retrieval` | 🟡 Medium | **1.000** |
+| `knowledge_synthesis` | 🔴 Hard | **0.560** |
+| **Average Global Index** | | **0.853** |
 
 ---
 
-## 🔁 Reward Design
+## 🔁 Progress Design & Reward Function
 
-Rewards are **dense** — every step produces a signal:
+Rewards are **dense and meaningful** — every step produces a targeted signal eliminating sparse loops. Undesirable behavior is heavily penalized (e.g. repeated failure/looping or hallucinating fake notes).
 
 ```
 Task 1 (categorization):
@@ -190,41 +214,23 @@ Task 3 (synthesis):
 
 ---
 
-## 🐳 Docker
-
-```bash
-# Build
-docker build -t second-brain-env .
-
-# Run (starts all 3 task servers automatically)
-docker run -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 second-brain-env
-
-# Test
-curl -X POST http://localhost:8000/reset
-curl -X POST http://localhost:8000/step \
-  -H "Content-Type: application/json" \
-  -d '{"action_type": "categorize", "content": "work"}'
-```
-
----
-
 ## 📁 Project Structure
 
 ```
 second_brain_env/
-├── inference.py          ← baseline inference script (root level)
-├── openenv.yaml          ← environment manifest
-├── pyproject.toml        ← dependencies
-├── README.md
-├── __init__.py           ← exports Action, Observation, Env
-├── models.py             ← Pydantic typed models
-├── client.py             ← WebSocket client
+├── Dockerfile            ← Container setup utilizing start.sh
+├── start.sh              ← Multi-port task orchestrator
+├── inference.py          ← Baseline OpenEnv tracking script
+├── openenv.yaml          ← Environment architecture manifest
+├── pyproject.toml        ← PyPI Dependencies + DotEnv
+├── README.md             
+├── __init__.py           
+├── models.py             ← Pydantic typed OpenEnv models
+├── client.py             
 └── server/
-    ├── app.py            ← FastAPI server
-    ├── second_brain_env_environment.py  ← step/reset/state logic
-    ├── data.py           ← seed notes and knowledge base
-    ├── requirements.txt
-    └── Dockerfile
+    ├── app.py            ← FastAPI & create_web_interface_app Server
+    ├── second_brain_env_environment.py  
+    └── data.py           ← Static Seeded Knowledge Base 
 ```
 
 ---
