@@ -68,7 +68,7 @@ The Environment hosts 3 distinct difficulty-scaled tasks, each with deterministi
 ## 📐 Action Space
 
 ```python
-class SecondBrainAction(BaseModel):
+class SecondBrainAction(Action):
     action_type: str   # "categorize" | "retrieve" | "synthesize" | "tag" | "skip"
     content: str       # category name / search query / synthesized answer
     note_id: Optional[str]       # target note ID (optional)
@@ -86,7 +86,7 @@ class SecondBrainAction(BaseModel):
 ## 👁️ Observation Space
 
 ```python
-class SecondBrainObservation(BaseModel):
+class SecondBrainObservation(Observation):
     current_note: Optional[Dict]        # note being processed (Task 1)
     query: str                          # question to answer (Task 2 & 3)
     retrieved_notes: Optional[List]     # top notes from KB search
@@ -116,8 +116,8 @@ cd second-brain-env
 ### 2. Run locally with Custom Docker
 ```bash
 docker build -t second-brain-env .
-# start.sh automatically loads all independent Task backend endpoints
-docker run -p 8000:8000 -p 8001:8001 -p 8002:8002 -p 8003:8003 second-brain-env
+# The Docker container will automatically launch the internal servers and execute inference.py
+docker run -e HF_TOKEN="your_hf_token_here" second-brain-env
 ```
 
 ### 3. Connect as a client
@@ -218,14 +218,15 @@ Task 3 (synthesis):
 
 ```
 second_brain_env/
-├── Dockerfile            ← Container setup utilizing start.sh
-├── start.sh              ← Multi-port task orchestrator
+├── Dockerfile            ← Container setup executing inference module
+├── start.sh              ← Shell script server orchestrator
 ├── inference.py          ← Baseline OpenEnv tracking script
+├── requirements.txt      ← Project dependencies for container setup
 ├── openenv.yaml          ← Environment architecture manifest
-├── pyproject.toml        ← PyPI Dependencies + DotEnv
+├── pyproject.toml        ← PyPI Package Dependencies
 ├── README.md             
 ├── __init__.py           
-├── models.py             ← Pydantic typed OpenEnv models
+├── models.py             ← Strongly typed OpenEnv primitive models
 ├── client.py             
 └── server/
     ├── app.py            ← FastAPI & create_web_interface_app Server
