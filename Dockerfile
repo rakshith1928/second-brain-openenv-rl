@@ -11,14 +11,7 @@ RUN apt-get update && \
 COPY . /app
 
 # Install Python dependencies
-RUN pip install --no-cache-dir \
-    openenv-core \
-    fastapi \
-    "uvicorn[standard]" \
-    pydantic \
-    websockets \
-    openai \
-    python-dotenv
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Set PYTHONPATH so all imports resolve correctly
 ENV PYTHONPATH="/app:/app/server"
@@ -33,4 +26,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Make start script executable & run
 RUN chmod +x /app/start.sh
-CMD ["/app/start.sh"]
+CMD ["python", "inference.py"]

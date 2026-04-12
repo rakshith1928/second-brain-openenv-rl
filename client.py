@@ -29,10 +29,9 @@ class SecondBrainEnv(EnvClient):
     def _parse_result(self, data: dict):
         obs_data = data.get("observation", {})
 
-        # Pull reward out of the raw dict BEFORE Pydantic touches it.
-        # The base EnvClient may not forward all fields — this is the only
-        # reliable place to read it.
-        reward = float(obs_data.get("reward", 0.0))
+        # The OpenEnv HTTP server serialization implicitly strips 'reward' from 
+        # the nested observation and surfaces it at the root of the JSON.
+        reward = float(data.get("reward", obs_data.get("reward", 0.0)))
 
         obs  = self.observation_type(**obs_data)
         done = data.get("done", False)

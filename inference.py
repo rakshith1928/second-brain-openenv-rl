@@ -25,9 +25,13 @@ from models import SecondBrainAction, ActionType
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-API_KEY      = os.getenv("GROQ_API_KEY") or os.getenv("HF_TOKEN") or ""
-API_BASE_URL = os.getenv("API_BASE_URL", "https://api.groq.com/openai/v1")
-MODEL_NAME   = os.getenv("MODEL_NAME", "llama-3.1-8b-instant")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME   = os.getenv("MODEL_NAME", "gpt-4.1-mini")
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+if HF_TOKEN is None:
+    raise ValueError("HF_TOKEN environment variable is required")
+
 BENCHMARK    = "second_brain_env"
 MAX_STEPS    = 20
 TEMPERATURE  = 0.2
@@ -65,7 +69,7 @@ def start_servers():
 
     for task_name, port in TASK_PORTS.items():
         if _check_server(port):
-            print(f"[INFO] Server already running on port {port} for {task_name}", flush=True)
+            # print(f"[INFO] Server already running on port {port} for {task_name}", flush=True)
             continue
 
         env_copy = env.copy()
@@ -79,17 +83,17 @@ def start_servers():
             cwd=os.path.dirname(os.path.abspath(__file__)),
         )
         _server_procs.append(proc)
-        print(f"[INFO] Started server for {task_name} on port {port} (PID {proc.pid})", flush=True)
+        # print(f"[INFO] Started server for {task_name} on port {port} (PID {proc.pid})", flush=True)
 
     # Wait for servers to be ready
-    print("[INFO] Waiting for servers to start...", flush=True)
+    # print("[INFO] Waiting for servers to start...", flush=True)
     for attempt in range(30):
         all_ready = all(_check_server(p) for p in TASK_PORTS.values())
         if all_ready:
-            print("[INFO] All servers ready.", flush=True)
+            # print("[INFO] All servers ready.", flush=True)
             return
         time.sleep(1)
-    print("[WARN] Some servers may not be ready after 30s.", flush=True)
+    # print("[WARN] Some servers may not be ready after 30s.", flush=True)
 
 def stop_servers():
     """Stop all servers started by this script."""
@@ -122,7 +126,7 @@ def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> No
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
         f"[END] success={str(success).lower()} steps={steps} "
-        f"score={score:.3f} rewards={rewards_str}",
+        f"rewards={rewards_str}",
         flush=True,
     )
 
@@ -313,7 +317,7 @@ def get_agent_action(
         )
 
     except Exception as exc:
-        print(f"[DEBUG] LLM parse error: {exc}", flush=True)
+        # print(f"[DEBUG] API or parse error: {exc}", flush=True)
         fallbacks = {
             "note_categorization": SecondBrainAction(
                 action_type=ActionType.categorize,
@@ -374,12 +378,12 @@ async def run_task(client: OpenAI, task_name: str) -> float:
         result = await env.reset()
         obs: dict = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)  # type: ignore
 
-        print(
-            f"[DEBUG] Server task: {obs.get('task_name')} "
-            f"| query: {obs.get('query')} "
-            f"| note: {obs.get('current_note', {}).get('id') if obs.get('current_note') else None}",
-            flush=True,
-        )
+        # print(
+        #     f"[DEBUG] Server task: {obs.get('task_name')} "
+        #     f"| query: {obs.get('query')} "
+        #     f"| note: {obs.get('current_note', {}).get('id') if obs.get('current_note') else None}",
+        #     flush=True,
+        # )
 
         retrieves_this_question = 0
         RETRIEVES_BEFORE_SYNTH = 3
@@ -399,15 +403,15 @@ async def run_task(client: OpenAI, task_name: str) -> float:
             try:
                 result = await env.step(action)
 
-                reward = float(getattr(result, "reward", 0.0))
-
                 obs: dict = result.observation.model_dump() if hasattr(result.observation, "model_dump") else dict(result.observation)  # type: ignore
+                
+                reward = float(getattr(result, "reward", None) or obs.get("reward", 0.0))
                 done = bool(result.done)
                 error = None
 
-                if obs.get("retrieved_notes"):
-                    for n in obs["retrieved_notes"]:
-                        print(f"  [RETRIEVED] {n['id']}: {n['text'][:70]}", flush=True)
+                # if obs.get("retrieved_notes"):
+                #     for n in obs["retrieved_notes"]:
+                #         print(f"  [RETRIEVED] {n['id']}: {n['text'][:70]}", flush=True)
 
                 if task_name == "knowledge_synthesis":
                     if action.action_type == ActionType.synthesize:
@@ -433,7 +437,7 @@ async def run_task(client: OpenAI, task_name: str) -> float:
         success = score >= SUCCESS_THRESHOLD
 
     except Exception as e:
-        print(f"[DEBUG] Episode error: {e}", flush=True)
+        pass # print(f"[DEBUG] Episode error: {e}", flush=True)
     finally:
         try:
             await env.close()
@@ -448,25 +452,14 @@ async def run_task(client: OpenAI, task_name: str) -> float:
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
     all_scores = {}
     for task_name in TASKS:
-        print(f"\n{'='*60}", flush=True)
-        print(f"Running task: {task_name}", flush=True)
-        print(f"{'='*60}", flush=True)
         score = await run_task(client, task_name)
         all_scores[task_name] = score
 
-    print(f"\n{'='*60}", flush=True)
-    print("BASELINE SCORES SUMMARY", flush=True)
-    print(f"{'='*60}", flush=True)
-    for task, score in all_scores.items():
-        status = "PASS" if score >= SUCCESS_THRESHOLD else "FAIL"
-        print(f"  [{status}]  {task}: {score:.3f}", flush=True)
-    overall = sum(all_scores.values()) / len(all_scores)
-    print(f"\n  Overall average: {overall:.3f}", flush=True)
-    print(f"{'='*60}", flush=True)
+    # Silenced summary metrics to preserve pure stdout for hackathon parser
 
 
 if __name__ == "__main__":
